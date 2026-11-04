@@ -405,7 +405,8 @@ namespace ClawdPet
                 if (st.GetValueOrDefault("throw") >= 10) parts.Add("любит тебя бросать");
                 if (st.GetValueOrDefault("tap") >= 40) parts.Add("часто тыкает в тебя");
                 if (st.GetValueOrDefault("shake") >= 8) parts.Add("часто трясёт окна");
-                if (st.GetValueOrDefault("feed") >= 10) parts.Add("часто тебя кормит");
+                if (st.GetValueOrDefault("feed") >= 10) parts.Add("часто приносит тебе иконки с панели задач");
+                if (st.GetValueOrDefault("steal") >= 10) parts.Add("часто сам таскает иконки с панели задач");
                 if (st.GetValueOrDefault("clean") >= 5) parts.Add("убирает за тобой кучки");
                 return parts;
             }
@@ -455,6 +456,26 @@ namespace ClawdPet
                 }
                 return lines;
             }
+        }
+
+        public List<(string Time, string Text)> RecentPairs(int limit = 4, double now = 0)
+        {
+            if (now <= 0) now = Now();
+            var list = new List<(string, string)>();
+            lock (Lock)
+            {
+                for (int i = Data.Episodes.Count - 1; i >= 0 && list.Count < limit; i--)
+                {
+                    var ep = Data.Episodes[i];
+                    if (ep.K == "session") continue;
+                    var line = EpisodeLine(ep, now);
+                    if (line == null) continue;
+                    int cut = line.IndexOf(" — ", StringComparison.Ordinal);
+                    if (cut > 0) list.Add((line[..cut], line[(cut + 3)..]));
+                    else list.Add(("", line));
+                }
+            }
+            return list;
         }
 
         public List<string> RecentSaid(int limit = 6)
@@ -514,7 +535,7 @@ namespace ClawdPet
                 var habits = Habits();
                 if (habits.Count > 0) lines.Add("Привычки: " + string.Join("; ", habits) + ".");
                 lines.Add($"Погладили {st.GetValueOrDefault("pet")}, потыкали {st.GetValueOrDefault("tap")}, " +
-                          $"бросили {st.GetValueOrDefault("throw")}, съел печенек {st.GetValueOrDefault("eat")}, " +
+                          $"бросили {st.GetValueOrDefault("throw")}, съел иконок {st.GetValueOrDefault("eat")}, " +
                           $"убрано кучек {st.GetValueOrDefault("clean")}.");
                 var recent = Recent(4, now);
                 if (recent.Count > 0) lines.Add("Последнее: " + string.Join("; ", recent) + ".");

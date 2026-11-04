@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -58,7 +59,7 @@ namespace ClawdPet
         }
     }
 
-    /// <summary>Маленькое окошко с одной картинкой: печенька или кучка.</summary>
+    /// <summary>Маленькое окошко с одной картинкой: иконка с панели задач или кучка.</summary>
     public class SpriteWindow : OverlayWindow
     {
         public readonly WpfImage Img;
@@ -203,23 +204,27 @@ namespace ClawdPet
             _bubbleText = new TextBlock
             {
                 TextWrapping = TextWrapping.Wrap,
-                MaxWidth = 230,
-                FontSize = 13,
-                FontFamily = new FontFamily("Segoe UI"),
-                Foreground = new SolidColorBrush(Color.FromRgb(0x1F, 0x1F, 0x1F)),
-                TextAlignment = TextAlignment.Center,
+                MaxWidth = 240,
+                FontSize = 12.5,
+                FontFamily = Theme.Font,
+                Foreground = Theme.FgBrush,
+                TextAlignment = TextAlignment.Left,
+                LineHeight = 18,
             };
             Bubble = new Border
             {
                 Child = _bubbleText,
-                Background = Brushes.White,
-                BorderBrush = new SolidColorBrush(Color.FromRgb(0xD9, 0xD9, 0xD9)),
+                Background = new SolidColorBrush(Color.FromArgb(0xF4, Theme.Bg.R, Theme.Bg.G, Theme.Bg.B)),
+                BorderBrush = Theme.AccentBrush,
                 BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(12),
+                CornerRadius = new CornerRadius(4),
                 Padding = new Thickness(10, 6, 10, 7),
                 Visibility = Visibility.Collapsed,
                 Opacity = 0,
-                Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 6, ShadowDepth = 1, Opacity = 0.18 },
+                Effect = new System.Windows.Media.Effects.DropShadowEffect
+                {
+                    BlurRadius = 12, ShadowDepth = 2, Direction = 270, Opacity = 0.45, Color = Colors.Black,
+                },
             };
             Bubble.MouseLeftButtonDown += (_, e) => { e.Handled = true; HideBubble(); };
 
@@ -270,15 +275,24 @@ namespace ClawdPet
         }
 
         public void SetFrame(BitmapSource bmp) => PetImg.Source = bmp;
-        public void SetRotation(double deg) { if (Math.Abs(_rot.Angle - deg) > 0.01) _rot.Angle = deg; }
+        public void SetRotation(double deg)
+        {
+            // не дёргаем рендер из-за сотых долей градуса — это лишняя перерисовка
+            if (Math.Abs(_rot.Angle - deg) > 0.2) _rot.Angle = deg;
+        }
 
         public bool BubbleVisible { get; private set; }
 
         public void ShowBubble(string text)
         {
             _bubbleGen++;
-            _bubbleText.Text = text;
+            _bubbleText.Inlines.Clear();
+            _bubbleText.Inlines.Add(new Run("› ") { Foreground = Theme.AccentBrush });
+            _bubbleText.Inlines.Add(new Run(text));
             Bubble.Visibility = Visibility.Visible;
+            Bubble.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            _bubbleW = Bubble.DesiredSize.Width;
+            _bubbleH = Bubble.DesiredSize.Height;
             Bubble.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(160)));
             BubbleVisible = true;
         }
@@ -293,12 +307,10 @@ namespace ClawdPet
             Bubble.BeginAnimation(OpacityProperty, fade);
         }
 
-        /// <summary>Размер пузыря в пикселях.</summary>
-        public (double W, double H) BubbleSize()
-        {
-            Bubble.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-            return (Bubble.DesiredSize.Width * Scale, Bubble.DesiredSize.Height * Scale);
-        }
+        double _bubbleW, _bubbleH;
+
+        /// <summary>Размер пузыря в пикселях (кешируется, чтобы не мерить текст каждый кадр).</summary>
+        public (double W, double H) BubbleSize() => (_bubbleW * Scale, _bubbleH * Scale);
 
         public void SetBubbleLocal(double pxX, double pxY)
         {

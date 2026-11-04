@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace ClawdPet
 {
@@ -45,16 +48,13 @@ namespace ClawdPet
         }
 
         /// <summary>Сканирует видимые (не перекрытые сверху) участки верхних краёв окон.</summary>
-        public static List<Platform> ScanPlatforms(int selfPid, double minTop, double maxTop)
+        static List<Platform> ScanAll(int selfPid)
         {
             var result = new List<Platform>();
-            List<Win> wins;
-            try { wins = Windows(selfPid); }
-            catch { return result; }
+            var wins = Windows(selfPid);
             for (int i = 0; i < wins.Count; i++)
             {
                 var r = wins[i].R;
-                if (r.Top < minTop || r.Top > maxTop) continue;
                 var segs = new List<(double, double)> { (r.Left, r.Right) };
                 for (int j = 0; j < i && segs.Count > 0; j++)
                 {
@@ -76,7 +76,92 @@ namespace ClawdPet
             return result;
         }
 
+        // ---------- кеш платформ ----------
+        // Перечисление окон занимает единицы миллисекунд и раньше шло на UI-потоке
+        // по несколько раз в секунду — из-за этого проседал FPS. Теперь скан идёт в фоне,
+        // а на UI-потоке остаётся только фильтрация готового снимка.
+
+        static readonly object PlatformLock = new();
+        static List<Platform> _platforms = new();
+        static long _platformsAt = long.MinValue / 2;
+        static int _platformsBusy;
+        static volatile bool _platformsInit;
+        const int PlatformTtlMs = 220;
+
+        static void Publish(List<Platform> snapshot)
+        {
+            lock (PlatformLock) _platforms = snapshot;
+            Interlocked.Exchange(ref _platformsAt, Environment.TickCount64);
+            _platformsInit = true;
+        }
+
+        public static List<Platform> ScanPlatforms(int selfPid, double minTop, double maxTop)
+        {
+            long now = Environment.TickCount64;
+            bool stale = now - Interlocked.Read(ref _platformsAt) > PlatformTtlMs;
+            if ((stale || !_platformsInit) && Interlocked.CompareExchange(ref _platformsBusy, 1, 0) == 0)
+            {
+                if (!_platformsInit)
+                {
+                    // Первый скан — сразу, чтобы питомец при запуске знал, где стоять.
+                    try { Publish(ScanAll(selfPid)); }
+                    catch (Exception e) { Log.Write("scan: " + e.Message); }
+                    finally { Interlocked.Exchange(ref _platformsBusy, 0); }
+                }
+                else
+                {
+                    int pid = selfPid;
+                    Task.Run(() =>
+                    {
+                        try { Publish(ScanAll(pid)); }
+                        catch (Exception e) { Log.Write("scan: " + e.Message); }
+                        finally { Interlocked.Exchange(ref _platformsBusy, 0); }
+                    });
+                }
+            }
+            List<Platform> snapshot;
+            lock (PlatformLock) snapshot = _platforms;
+            var result = new List<Platform>(snapshot.Count);
+            foreach (var p in snapshot)
+            {
+                if (p.Top < minTop || p.Top > maxTop) continue;
+                result.Add(new Platform { Hwnd = p.Hwnd, X0 = p.X0, X1 = p.X1, Top = p.Top, Left = p.Left, Name = p.Name });
+            }
+            return result;
+        }
+
         static readonly Dictionary<uint, (string Key, string Name)> ProcCache = new();
+
+        /// <summary>Запущенные программы, у которых есть окно на панели задач: имя и путь к exe.</summary>
+        public static List<(string Name, string Exe)> VisibleApps(int selfPid)
+        {
+            var result = new List<(string Name, string Exe)>();
+            List<Win> wins;
+            try { wins = Windows(selfPid); }
+            catch { return result; }
+            foreach (var w in wins)
+            {
+                Native.GetWindowThreadProcessId(w.H, out uint pid);
+                if (pid == 0 || pid == selfPid) continue;
+                try
+                {
+                    using var p = Process.GetProcessById((int)pid);
+                    string exe;
+                    try { exe = p.MainModule?.FileName; } catch { continue; }
+                    if (string.IsNullOrWhiteSpace(exe)) continue;
+                    string name = p.ProcessName;
+                    try
+                    {
+                        var desc = p.MainModule?.FileVersionInfo.FileDescription;
+                        if (!string.IsNullOrWhiteSpace(desc) && desc.Length <= 40) name = desc.Trim();
+                    }
+                    catch { }
+                    result.Add((name, exe));
+                }
+                catch { }
+            }
+            return result;
+        }
 
         /// <summary>Активная программа: ключ (имя exe), понятное имя и заголовок окна.</summary>
         public static (string Key, string Name, string Title) Foreground(int selfPid)

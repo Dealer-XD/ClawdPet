@@ -2,11 +2,13 @@ using System;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Shapes;
 
 namespace ClawdPet
 {
-    /// <summary>Окно настроек — аналог create_settings из плагина.</summary>
+    /// <summary>Окно настроек в терминальной стилистике Claude Code.</summary>
     public class SettingsWindow : Window
     {
         readonly Config _cfg;
@@ -16,55 +18,146 @@ namespace ClawdPet
         {
             _cfg = cfg;
             _pet = pet;
-            Title = "Clawd — настройки";
-            Width = 500;
-            Height = 640;
+            Title = "Claude Code — Clawd";
+            Width = 580;
+            Height = 740;
+            MinWidth = 520;
+            WindowStyle = WindowStyle.None;
+            AllowsTransparency = true;
+            Background = Brushes.Transparent;
+            ResizeMode = ResizeMode.NoResize;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
-            FontFamily = new FontFamily("Segoe UI");
-            FontSize = 13;
+            FontFamily = Theme.Font;
+            FontSize = 12.5;
+            Resources = Theme.Load();
             Icon = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(
                 pet.MakeTrayIcon().Handle, Int32Rect.Empty, System.Windows.Media.Imaging.BitmapSizeOptions.FromEmptyOptions());
 
-            var tabs = new TabControl { Margin = new Thickness(8) };
-            tabs.Items.Add(new TabItem { Header = "Питомец", Content = Scroll(PetTab()) });
-            tabs.Items.Add(new TabItem { Header = "ИИ", Content = Scroll(AiTab()) });
-            tabs.Items.Add(new TabItem { Header = "Мозг", Content = Scroll(BrainTab()) });
-            tabs.Items.Add(new TabItem { Header = "О программе", Content = Scroll(AboutTab()) });
-            Content = tabs;
+            var root = new Grid { Margin = new Thickness(14) };
+            root.Children.Add(new Border { Background = Theme.BgBrush, CornerRadius = new CornerRadius(8), Opacity = 0.985 });
+            root.Children.Add(new Rectangle
+            {
+                Stroke = Theme.AccentBrush, StrokeThickness = 1,
+                StrokeDashArray = new DoubleCollection { 4, 3 }, RadiusX = 8, RadiusY = 8,
+            });
+
+            var layout = new Grid { Margin = new Thickness(18, 12, 18, 16) };
+            layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            layout.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            layout.Children.Add(Chrome());
+            var tabs = Tabs();
+            Grid.SetRow(tabs, 1);
+            layout.Children.Add(tabs);
+            root.Children.Add(layout);
+            Content = root;
+
+            PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) Close(); };
             Closed += (_, _) => _pet.ConfigChanged(false);
         }
 
-        static ScrollViewer Scroll(UIElement e) => new() { Content = e, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        FrameworkElement Chrome()
+        {
+            var grid = new Grid { Margin = new Thickness(2, 0, 2, 10) };
+            grid.ColumnDefinitions.Add(new ColumnDefinition());
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        StackPanel Panel() => new() { Margin = new Thickness(12) };
+            var title = new StackPanel { Orientation = Orientation.Horizontal };
+            title.Children.Add(new TextBlock { Text = "Claude Code v2.0.0", Foreground = Theme.AccentBrush, FontSize = 13 });
+            title.Children.Add(new TextBlock { Text = "  —  настройки Clawd", Foreground = Theme.DimBrush, FontSize = 12 });
+            grid.Children.Add(title);
 
-        void Header(StackPanel p, string text) =>
-            p.Children.Add(new TextBlock { Text = text, FontWeight = FontWeights.SemiBold, FontSize = 14, Margin = new Thickness(0, 12, 0, 4) });
+            var close = new TextBlock
+            {
+                Text = "[ закрыть ]",
+                Foreground = Theme.DimBrush,
+                FontSize = 12,
+                Cursor = Cursors.Hand,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            close.MouseEnter += (_, _) => close.Foreground = Theme.AccentBrush;
+            close.MouseLeave += (_, _) => close.Foreground = Theme.DimBrush;
+            close.MouseLeftButtonUp += (_, _) => Close();
+            Grid.SetColumn(close, 1);
+            grid.Children.Add(close);
+
+            grid.MouseLeftButtonDown += (_, e) =>
+            {
+                if (e.ChangedButton == MouseButton.Left) DragMove();
+            };
+            return grid;
+        }
+
+        TabControl Tabs()
+        {
+            var tabs = new TabControl();
+            tabs.Items.Add(new TabItem { Header = "питомец", Content = Scroll(PetTab()) });
+            tabs.Items.Add(new TabItem { Header = "ии", Content = Scroll(AiTab()) });
+            tabs.Items.Add(new TabItem { Header = "мозг", Content = Scroll(BrainTab()) });
+            tabs.Items.Add(new TabItem { Header = "о программе", Content = Scroll(AboutTab()) });
+            return tabs;
+        }
+
+        static ScrollViewer Scroll(UIElement e) => new()
+        {
+            Content = e,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Focusable = false,
+        };
+
+        StackPanel Panel() => new() { Margin = new Thickness(2, 0, 10, 12) };
+
+        void Header(StackPanel p, string text)
+        {
+            if (p.Children.Count > 0)
+                p.Children.Add(new Rectangle { Height = 1, Fill = Theme.LineBrush, Margin = new Thickness(0, 14, 0, 8) });
+            p.Children.Add(new TextBlock
+            {
+                Text = text,
+                Foreground = Theme.AccentBrush,
+                FontSize = 13,
+                Margin = new Thickness(0, 0, 0, 6),
+            });
+        }
 
         void Hint(StackPanel p, string text) =>
-            p.Children.Add(new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, Foreground = Brushes.Gray, Margin = new Thickness(0, 0, 0, 6), FontSize = 12 });
+            p.Children.Add(new TextBlock
+            {
+                Text = text,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = Theme.DimBrush,
+                Margin = new Thickness(0, 0, 0, 8),
+                FontSize = 11.5,
+                LineHeight = 17,
+            });
 
         void Check(StackPanel p, string label, Func<bool> get, Action<bool> set, bool visuals = false)
         {
-            var cb = new CheckBox { Content = label, IsChecked = get(), Margin = new Thickness(0, 4, 0, 4) };
+            var cb = new CheckBox { Content = label, IsChecked = get(), Margin = new Thickness(0, 2, 0, 2) };
             cb.Click += (_, _) => { set(cb.IsChecked == true); _pet.ConfigChanged(visuals); };
             p.Children.Add(cb);
         }
 
         void Combo(StackPanel p, string label, string[] items, Func<int> get, Action<int> set, bool visuals = false)
         {
-            p.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 6, 0, 2) });
-            var cb = new ComboBox { ItemsSource = items, SelectedIndex = Math.Clamp(get(), 0, items.Length - 1), Width = 260, HorizontalAlignment = HorizontalAlignment.Left };
+            p.Children.Add(new TextBlock { Text = label, Foreground = Theme.DimBrush, Margin = new Thickness(0, 8, 0, 4) });
+            var cb = new ComboBox
+            {
+                ItemsSource = items,
+                SelectedIndex = Math.Clamp(get(), 0, items.Length - 1),
+                Width = 320,
+                HorizontalAlignment = HorizontalAlignment.Left,
+            };
             cb.SelectionChanged += (_, _) => { set(cb.SelectedIndex); _pet.ConfigChanged(visuals); };
             p.Children.Add(cb);
         }
 
         void Text(StackPanel p, string label, Func<string> get, Action<string> set, bool secret = false, bool multi = false)
         {
-            p.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 6, 0, 2) });
+            p.Children.Add(new TextBlock { Text = label, Foreground = Theme.DimBrush, Margin = new Thickness(0, 8, 0, 4) });
             if (secret)
             {
-                var pb = new PasswordBox { Password = get() ?? "", Width = 420, HorizontalAlignment = HorizontalAlignment.Left };
+                var pb = new PasswordBox { Password = get() ?? "", HorizontalAlignment = HorizontalAlignment.Stretch };
                 pb.PasswordChanged += (_, _) => set(pb.Password.Trim());
                 pb.LostFocus += (_, _) => _pet.ConfigChanged(false);
                 p.Children.Add(pb);
@@ -72,9 +165,12 @@ namespace ClawdPet
             }
             var tb = new TextBox
             {
-                Text = get() ?? "", Width = 420, HorizontalAlignment = HorizontalAlignment.Left,
-                AcceptsReturn = multi, TextWrapping = multi ? TextWrapping.Wrap : TextWrapping.NoWrap,
-                Height = multi ? 60 : double.NaN,
+                Text = get() ?? "",
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                AcceptsReturn = multi,
+                TextWrapping = multi ? TextWrapping.Wrap : TextWrapping.NoWrap,
+                Height = multi ? 64 : double.NaN,
+                VerticalContentAlignment = VerticalAlignment.Top,
             };
             tb.TextChanged += (_, _) => set(tb.Text.Trim());
             tb.LostFocus += (_, _) => _pet.ConfigChanged(false);
@@ -83,7 +179,13 @@ namespace ClawdPet
 
         void Button(StackPanel p, string label, Action click)
         {
-            var b = new Button { Content = label, Padding = new Thickness(12, 4, 12, 4), Margin = new Thickness(0, 8, 0, 0), HorizontalAlignment = HorizontalAlignment.Left };
+            var b = new Button
+            {
+                Content = label,
+                Padding = new Thickness(14, 5, 14, 5),
+                Margin = new Thickness(0, 8, 0, 0),
+                HorizontalAlignment = HorizontalAlignment.Left,
+            };
             b.Click += (_, _) => click();
             p.Children.Add(b);
         }
@@ -91,25 +193,26 @@ namespace ClawdPet
         UIElement PetTab()
         {
             var p = Panel();
-            Header(p, "Внешний вид");
+            Header(p, "внешний вид");
             Check(p, "Показывать Clawd", () => _cfg.Show, v => _cfg.Show = v);
             Combo(p, "Размер", C.SizeItems, () => _cfg.Size, v => _cfg.Size = v, true);
             var colors = Array.ConvertAll(C.Palettes, x => x.Name);
             Combo(p, "Цвет", colors, () => _cfg.Color, v => _cfg.Color = v, true);
 
-            Header(p, "Поведение");
+            Header(p, "поведение");
             Check(p, "Гравитация (стоит на панели задач и падает)", () => _cfg.Gravity, v => _cfg.Gravity = v);
             Check(p, "Стоит на окнах и катается на них", () => _cfg.RideWindows, v => _cfg.RideWindows = v);
             Check(p, "Слетает, если потрясти окно под ним", () => _cfg.ShakeWindows, v => _cfg.ShakeWindows = v);
             Check(p, "Гуляет сам", () => _cfg.Wander, v => _cfg.Wander = v);
             Check(p, "Реплики", () => _cfg.Phrases, v => _cfg.Phrases = v);
+            Check(p, "Сам таскает иконки с панели задач", () => _cfg.EatIcons, v => _cfg.EatIcons = v);
             Combo(p, "Засыпает", C.SleepItems, () => _cfg.Sleep, v => _cfg.Sleep = v);
             Check(p, "Танцует под музыку (любой плеер Windows)", () => _cfg.Dance, v => _cfg.Dance = v);
             Check(p, "Комментирует открытые программы", () => _cfg.AppEvents, v => _cfg.AppEvents = v);
-            Check(p, "Оставляет кучки, если переест", () => _cfg.Poop, v => _cfg.Poop = v);
+            Check(p, "Оставляет кучки, если переел иконок", () => _cfg.Poop, v => _cfg.Poop = v);
             Check(p, "Прятаться, когда игра или видео на весь экран", () => _cfg.HideFullscreen, v => _cfg.HideFullscreen = v);
 
-            Header(p, "Система");
+            Header(p, "система");
             Check(p, "Запускать вместе с Windows", () => Config.Autostart, v => Config.Autostart = v);
             Button(p, "Позвать к курсору", () => _pet.Recenter());
             return p;
@@ -118,7 +221,7 @@ namespace ClawdPet
         UIElement AiTab()
         {
             var p = Panel();
-            Header(p, "ИИ-реплики");
+            Header(p, "ии-реплики");
             Hint(p, "Clawd может придумывать реплики сам. Бесплатный ключ Gemini: aistudio.google.com/apikey. " +
                     "Подойдёт и любой OpenAI-совместимый сервер (OpenRouter, LM Studio, Ollama).");
             Check(p, "Включить ИИ", () => _cfg.AiEnabled, v => _cfg.AiEnabled = v);
@@ -133,7 +236,7 @@ namespace ClawdPet
             Check(p, "Обычные фразы, если ИИ недоступен", () => _cfg.AiFallback, v => _cfg.AiFallback = v);
             Text(p, "Характер (дополнение к личности)", () => _cfg.AiPersona, v => _cfg.AiPersona = v, multi: true);
 
-            Header(p, "Запасной провайдер (OpenAI-совместимый)");
+            Header(p, "запасной провайдер (openai-совместимый)");
             Text(p, "Адрес API", () => _cfg.Ai2Url, v => _cfg.Ai2Url = v);
             Text(p, "API-ключ", () => _cfg.Ai2Key, v => _cfg.Ai2Key = v, secret: true);
             Text(p, "Модель", () => _cfg.Ai2Model, v => _cfg.Ai2Model = v);
@@ -144,7 +247,7 @@ namespace ClawdPet
         UIElement BrainTab()
         {
             var p = Panel();
-            Header(p, "Память");
+            Header(p, "память");
             Hint(p, "Clawd помнит тебя: имя, привычки, любимые программы и треки, что вы делали вместе, " +
                     "копит привязанность и сам запоминает новые факты. Всё хранится только на этом компьютере.");
             Check(p, "Включить память", () => _cfg.BrainEnabled, v => _cfg.BrainEnabled = v);
@@ -152,14 +255,13 @@ namespace ClawdPet
             Text(p, "О себе (для ИИ)", () => _cfg.BrainAbout, v => _cfg.BrainAbout = v, multi: true);
             Check(p, "Запоминать новые факты от ИИ", () => _cfg.BrainLearn, v => _cfg.BrainLearn = v);
             Check(p, "Делиться памятью с ИИ", () => _cfg.BrainShare, v => _cfg.BrainShare = v);
-            Button(p, "Что Clawd помнит", () => MessageBox.Show(this, _pet.DescribeMemory(), "Память Clawd"));
+            Button(p, "Что Clawd помнит", () => ClaudeDialog.Info("Память Clawd", _pet.DescribeMemory()));
             Button(p, "Перенести память из плагина (clawd_brain.json)", ImportBrain);
             Button(p, "Открыть папку с данными", () =>
                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(Config.Dir) { UseShellExecute = true }));
             Button(p, "Забыть всё", () =>
             {
-                if (MessageBox.Show(this, "Clawd забудет всё, что знал о тебе. Точно?", "Забыть всё",
-                        MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
+                if (ClaudeDialog.Confirm("Забыть всё", "Clawd забудет всё, что знал о тебе. Точно?"))
                     _pet.BrainForget();
             });
             return p;
@@ -172,11 +274,12 @@ namespace ClawdPet
             try
             {
                 var raw = File.ReadAllText(dlg.FileName);
-                MessageBox.Show(this, _pet.BrainImport(raw) ? "Готово! Clawd всё вспомнил." : "Не получилось прочитать файл.", "Импорт памяти");
+                ClaudeDialog.Info("Импорт памяти",
+                    _pet.BrainImport(raw) ? "Готово! Clawd всё вспомнил." : "Не получилось прочитать файл.");
             }
             catch (Exception e)
             {
-                MessageBox.Show(this, e.Message, "Импорт памяти");
+                ClaudeDialog.Info("Импорт памяти", e.Message);
             }
         }
 
@@ -189,7 +292,8 @@ namespace ClawdPet
                     "перетащить — перенести, резко бросить — полёт. Правый клик по Clawd — меню.\n\n" +
                     "Стоит на панели задач и на верхних краях окон, катается, если двигать окно, " +
                     "и слетает, если окно потрясти. Подброшенный к верху экрана — повиснет на руках. " +
-                    "Танцует под музыку, комментирует программы, ест печеньки и иногда оставляет кучки — кликни, чтобы убрать.\n\n" +
+                    "Танцует под музыку, комментирует программы, таскает иконки с панели задач " +
+                    "и иногда оставляет кучки — кликни, чтобы убрать.\n\n" +
                     "Порт плагина для exteraGram (оригинал — @itskotovski, форк — @Skorvash).");
             return p;
         }

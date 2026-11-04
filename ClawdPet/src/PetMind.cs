@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Media.Imaging;
 
 namespace ClawdPet
 {
@@ -52,6 +53,19 @@ namespace ClawdPet
         }
 
         public string DescribeMemory() => _brain.Describe(UserName());
+
+        /// <summary>Портрет для меню в стиле Claude Code.</summary>
+        public BitmapSource Portrait(int cell = 6)
+        {
+            var pal = Palette;
+            return Sprites.RenderFrame(new FrameKey("happy", 0, "normal", "stand", 0, true, null), cell, pal.Body, pal.Eye).ToBitmap();
+        }
+
+        public string DisplayName() => UserName();
+
+        public string BondLabel() => _brain.BondLabel();
+
+        public List<(string Time, string Text)> RecentActivity(int limit = 4) => _brain.RecentPairs(limit);
 
         void BrainDirty()
         {

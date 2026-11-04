@@ -148,7 +148,6 @@ namespace ClawdPet
             Dictionary<char, uint> colors = kind switch
             {
                 "poop" => C.PoopColors,
-                "cookie" => C.CookieColors,
                 "heart" => new() { ['X'] = C.HeartColor },
                 "zzz" => new() { ['X'] = C.ZzzColor },
                 "spark" => new() { ['X'] = C.SparkColor },
@@ -159,6 +158,89 @@ namespace ClawdPet
                 for (int x = 0; x < rows[y].Length; x++)
                     if (colors.TryGetValue(rows[y][x], out var c))
                         cv.Rect(x * s, y * s, (x + 1) * s, (y + 1) * s, c);
+            return cv.ToBitmap();
+        }
+
+        static readonly (uint Bg, uint Glyph, string[] Rows)[] FallbackIcons =
+        {
+            (0xFF2E6FD9, 0xFFFFFFFF, new[] { ".XXXXX.", "XX...XX", "X..X..X", "X.XXX.X", "X..X..X", "XX...XX", ".XXXXX." }),
+            (0xFFD9A55B, 0xFF5A3A1E, new[] { "..XXX..", ".X...X.", "XXXXXXX", "X.....X", "X.....X", "X.....X", "XXXXXXX" }),
+            (0xFF26241F, 0xFF5FD98A, new[] { "XXXXXXX", "X.....X", "X.X...X", "X..X..X", "X.X...X", "X.....X", "XXXXXXX" }),
+            (0xFF7B61FF, 0xFFFFFFFF, new[] { "..XXX..", ".X...X.", "X.....X", "X.....X", "X.....X", ".X...X.", "..XXX.." }),
+        };
+
+        static bool InsideRound(int x, int y, int w, int h, int r)
+        {
+            int nx = x < r ? r - x : (x >= w - r ? x - (w - r - 1) : 0);
+            int ny = y < r ? r - y : (y >= h - r ? y - (h - r - 1) : 0);
+            return nx * nx + ny * ny <= r * r;
+        }
+
+        static int Blend(int dst, int src)
+        {
+            double a = ((src >> 24) & 0xFF) / 255.0;
+            int r = (int)(((src >> 16) & 0xFF) * a + ((dst >> 16) & 0xFF) * (1 - a));
+            int g = (int)(((src >> 8) & 0xFF) * a + ((dst >> 8) & 0xFF) * (1 - a));
+            int b = (int)((src & 0xFF) * a + (dst & 0xFF) * (1 - a));
+            return unchecked((int)(0xFF000000u | (uint)(r << 16) | (uint)(g << 8) | (uint)b));
+        }
+
+        static void TileBackground(PixelCanvas cv, int size, uint fill)
+        {
+            int radius = Math.Max(3, size / 5);
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    if (!InsideRound(x, y, size, size, radius)) continue;
+                    bool inner = x > 0 && y > 0 && x < size - 1 && y < size - 1
+                                 && InsideRound(x - 1, y - 1, size - 2, size - 2, Math.Max(1, radius - 1));
+                    cv.Px[y * size + x] = unchecked((int)(inner ? fill : 0xFF4A463E));
+                }
+        }
+
+        /// <summary>Настоящая иконка программы на тёмной «кнопке» панели задач.</summary>
+        public static BitmapSource IconTile(BitmapSource icon, int size)
+        {
+            var cv = new PixelCanvas(size, size);
+            TileBackground(cv, size, 0xFF26241F);
+            if (icon == null) return cv.ToBitmap();
+            BitmapSource src = icon.Format == PixelFormats.Bgra32
+                ? icon
+                : new FormatConvertedBitmap(icon, PixelFormats.Bgra32, null, 0);
+            int sw = src.PixelWidth, sh = src.PixelHeight;
+            if (sw <= 0 || sh <= 0) return cv.ToBitmap();
+            int[] sp = new int[sw * sh];
+            src.CopyPixels(sp, sw * 4, 0);
+            int pad = Math.Max(2, size / 8);
+            int inner = Math.Max(1, size - pad * 2);
+            int ox = (size - inner) / 2, oy = (size - inner) / 2;
+            for (int y = 0; y < inner; y++)
+                for (int x = 0; x < inner; x++)
+                {
+                    int sx = x * sw / inner, sy = y * sh / inner;
+                    int c = sp[sy * sw + sx];
+                    if (((c >> 24) & 0xFF) < 8) continue;
+                    int dx = ox + x, dy = oy + y;
+                    if (!InsideRound(dx, dy, size, size, Math.Max(3, size / 5))) continue;
+                    cv.Px[dy * size + dx] = Blend(cv.Px[dy * size + dx], c);
+                }
+            return cv.ToBitmap();
+        }
+
+        /// <summary>Запасная нарисованная иконка, если запущенных программ не нашлось.</summary>
+        public static BitmapSource FallbackIcon(int size, int index)
+        {
+            var (bg, glyph, rows) = FallbackIcons[Math.Abs(index) % FallbackIcons.Length];
+            var cv = new PixelCanvas(size, size);
+            TileBackground(cv, size, bg);
+            int pad = Math.Max(2, size / 8);
+            int cell = Math.Max(1, (size - pad * 2) / rows.Length);
+            int gw = rows[0].Length * cell, gh = rows.Length * cell;
+            int ox = (size - gw) / 2, oy = (size - gh) / 2;
+            for (int y = 0; y < rows.Length; y++)
+                for (int x = 0; x < rows[y].Length; x++)
+                    if (rows[y][x] == 'X')
+                        cv.Rect(ox + x * cell, oy + y * cell, ox + (x + 1) * cell, oy + (y + 1) * cell, glyph);
             return cv.ToBitmap();
         }
 

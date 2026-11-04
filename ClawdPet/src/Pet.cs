@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Forms = System.Windows.Forms;
@@ -20,11 +21,12 @@ namespace ClawdPet
             public List<(double T, double X, double Y)> Hist = new();
         }
 
-        class Food
+        class Snack
         {
             public SpriteWindow Win;
             public double Born;
             public bool Eating;
+            public string Name;
         }
 
         readonly Config _cfg;
@@ -91,10 +93,11 @@ namespace ClawdPet
         bool _peekMoving;
         double _poopDue;
         int _poopNeed;
-        bool _goFood;
+        bool _goSnack;
+        double _nextSteal;
         bool _userAway;
         readonly List<SpriteWindow> _poops = new();
-        readonly List<Food> _foods = new();
+        readonly List<Snack> _snacks = new();
 
         readonly Dictionary<FrameKey, BitmapSource> _frames = new();
         readonly Dictionary<string, BitmapSource> _particleBmps = new();
@@ -138,8 +141,9 @@ namespace ClawdPet
                 Win.Layout(_w, _h);
             }
             foreach (var p in _poops) p.Show();
-            foreach (var f in _foods) f.Win.Show();
+            foreach (var f in _snacks) f.Win.Show();
             if (_cfg.Dance) _media.Start();
+            IconBank.Refresh(_pid);
             if (!_running)
             {
                 _running = true;
@@ -152,12 +156,13 @@ namespace ClawdPet
         public void Stop()
         {
             _running = false;
+            UnhookFrames();
             _timer.Stop();
             _media.Stop();
             Win.HideBubble();
             Win.Hide();
             foreach (var p in _poops) p.Hide();
-            foreach (var f in _foods) f.Win.Hide();
+            foreach (var f in _snacks) f.Win.Hide();
         }
 
         public void Shutdown()
@@ -166,10 +171,11 @@ namespace ClawdPet
             BrainFlush();
             _cfg.Save();
             _running = false;
+            UnhookFrames();
             _timer.Stop();
             _media.Stop();
             foreach (var p in _poops) p.Close();
-            foreach (var f in _foods) f.Win.Close();
+            foreach (var f in _snacks) f.Win.Close();
             Win.Close();
         }
 
@@ -192,10 +198,67 @@ namespace ClawdPet
 
         void Schedule(double delayMs)
         {
-            if (!_running) return;
+            if (!_running || _framesHooked) return;
             _timer.Stop();
             _timer.Interval = TimeSpan.FromMilliseconds(Math.Max(1, delayMs));
             _timer.Start();
+        }
+
+        // ---------- цикл кадров ----------
+        // Пока питомец движется (полёт, ходьба, перетаскивание), кадры берём из
+        // CompositionTarget.Rendering: он тикает ровно по частоте монитора, без дрожания
+        // DispatcherTimer. В спокойных состояниях хватает редкого таймера.
+
+        bool _framesHooked;
+        TimeSpan _frameTime;
+
+        void HookFrames()
+        {
+            if (_framesHooked) return;
+            _framesHooked = true;
+            _timer.Stop();
+            _frameTime = TimeSpan.MinValue;
+            CompositionTarget.Rendering += OnFrame;
+        }
+
+        void UnhookFrames()
+        {
+            if (!_framesHooked) return;
+            _framesHooked = false;
+            CompositionTarget.Rendering -= OnFrame;
+        }
+
+        void OnFrame(object sender, EventArgs e)
+        {
+            if (!_running)
+            {
+                UnhookFrames();
+                return;
+            }
+            if (e is RenderingEventArgs args)
+            {
+                if (args.RenderingTime == _frameTime) return;
+                _frameTime = args.RenderingTime;
+            }
+            try { Step(); }
+            catch (Exception ex) { Log.Write("frame: " + ex); }
+            if (_running) UpdateLoop();
+        }
+
+        void UpdateLoop()
+        {
+            if (!_running)
+            {
+                UnhookFrames();
+                return;
+            }
+            if (WantsContinuousFrames(Now))
+            {
+                HookFrames();
+                return;
+            }
+            UnhookFrames();
+            Schedule(NextDelay());
         }
 
         void Tick()
@@ -204,16 +267,19 @@ namespace ClawdPet
             if (!_running) return;
             try { Step(); }
             catch (Exception e) { Log.Write("tick: " + e); }
-            if (_running) Schedule(NextDelay());
+            if (_running) UpdateLoop();
+        }
+
+        bool WantsContinuousFrames(double now)
+        {
+            if (_hiddenFs) return false;
+            return _state is "press" or "drag" or "pet" or "fly" or "walk" || _hopActive || _walkIn || _platformMoving
+                   || _shakePending > 0 || now < _squashUntil || (_expr == "dizzy" && now < _exprUntil);
         }
 
         double NextDelay()
         {
             if (_hiddenFs) return 1000;
-            double now = Now;
-            if (_state is "press" or "drag" or "pet" or "fly" or "walk" || _hopActive || _walkIn || _platformMoving
-                || _shakePending > 0 || now < _squashUntil || (_expr == "dizzy" && now < _exprUntil))
-                return 16;
             if (_state is "hang" or "peek") return 33;
             if (_state == "sleep") return 250;
             if (_mediaKind != null && _state == "idle") return 33;
@@ -261,7 +327,7 @@ namespace ClawdPet
         BitmapSource ParticleBmp(string kind)
         {
             if (_particleBmps.TryGetValue(kind, out var bmp)) return bmp;
-            int s = kind is "poop" or "cookie" ? Math.Max(2, (int)(_unit * 0.9)) : Math.Max(2, (int)(_unit * 0.75));
+            int s = kind == "poop" ? Math.Max(2, (int)(_unit * 0.9)) : Math.Max(2, (int)(_unit * 0.75));
             bmp = Sprites.Pattern(kind, s);
             _particleBmps[kind] = bmp;
             return bmp;
@@ -279,6 +345,7 @@ namespace ClawdPet
             _nextBlink = now + 2.0;
             _nextAppComment = now + 8.0;
             _nextPeek = now + C.PeekAfter;
+            _nextSteal = now + C.StealFirst;
             _poopNeed = _rng.Next(C.PoopEvery.Item1, C.PoopEvery.Item2 + 1);
         }
 
@@ -311,7 +378,7 @@ namespace ClawdPet
                 _topCheck = now + 2.0;
                 Win.KeepOnTop();
                 foreach (var p in _poops) p.KeepOnTop();
-                foreach (var f in _foods) f.Win.KeepOnTop();
+                foreach (var f in _snacks) f.Win.KeepOnTop();
             }
 
             if (!_posReady)
@@ -387,13 +454,13 @@ namespace ClawdPet
                 {
                     Win.Hide();
                     foreach (var p in _poops) p.Hide();
-                    foreach (var f in _foods) f.Win.Hide();
+                    foreach (var f in _snacks) f.Win.Hide();
                 }
                 else
                 {
                     Win.Show();
                     foreach (var p in _poops) p.Show();
-                    foreach (var f in _foods) f.Win.Show();
+                    foreach (var f in _snacks) f.Win.Show();
                     _lastTick = now;
                 }
             }
@@ -407,8 +474,11 @@ namespace ClawdPet
             }
 
             if (_hiddenFs || !_posReady) return;
-            PruneFood(now);
-            PollApp(now);
+            PruneSnacks(now);
+            // перечисление процессов — не самое быстрое дело, не делаем его в полёте
+            if (_state is not ("fly" or "drag" or "press")) PollApp(now);
+            MaybeStealIcon(now);
+            IconBank.Refresh(_pid);
         }
 
         void OnUserBack(double now)
@@ -476,8 +546,8 @@ namespace ClawdPet
                 {
                     _x = Clamp(reached ? _walkTarget : _x, minX, maxX);
                     _state = "idle";
-                    _nextAction = now + (_goFood ? 0.3 : U(2.5, 6.0));
-                    _goFood = false;
+                    _nextAction = now + (_goSnack ? 0.3 : U(2.5, 6.0));
+                    _goSnack = false;
                     int side = _peekPending;
                     _peekPending = 0;
                     double edge = Dp(4);
@@ -509,7 +579,7 @@ namespace ClawdPet
 
             int timeout = C.SleepSeconds[(int)Clamp(_cfg.Sleep, 0, C.SleepSeconds.Length - 1)];
             if (timeout > 0 && now - _lastInteraction > timeout && !_hopActive && _mediaKind == null && !_walkIn
-                && _foods.Count == 0)
+                && _snacks.Count == 0)
             {
                 _state = "sleep";
                 _look = 0;
@@ -524,8 +594,8 @@ namespace ClawdPet
                 return;
             }
 
-            if (_foods.Count > 0 && !_hopActive && !_walkIn && _state == "idle" && now >= _nextAction - 3.0
-                && GoForFood(now, minX, maxX))
+            if (_snacks.Count > 0 && !_hopActive && !_walkIn && _state == "idle" && now >= _nextAction - 3.0
+                && GoForSnack(now, minX, maxX))
                 return;
 
             if (_mediaKind != null)
@@ -607,31 +677,54 @@ namespace ClawdPet
         {
             if (!_cfg.RideWindows) return false;
             if (now < _followScan) return true;
-            _followScan = now + 0.04;
-            var plats = Scan(minY, maxY);
-            Platform best = null;
-            double bestOverlap = -1;
-            double dx = 0;
-            foreach (var p in plats)
+            _followScan = now + 0.033;
+            var hwnd = _platform.Hwnd;
+            // Двигаемся вместе с окном по его реальным координатам: это дешевле, чем
+            // каждые 40 мс перечислять все окна, и заметно плавнее.
+            if (hwnd == IntPtr.Zero || !Native.IsWindow(hwnd) || !Native.IsWindowVisible(hwnd) || Native.IsIconic(hwnd))
+                return false;
+            var r = Native.Bounds(hwnd);
+            if (r.Right - r.Left < 120 || r.Bottom - r.Top < 60) return false;
+            double shift = r.Left - _platform.Left;
+
+            // Полный скан (из фонового кеша) нужен редко — чтобы уточнить видимый край окна.
+            if (now >= _platformScan)
             {
-                if (p.Hwnd != _platform.Hwnd) continue;
-                double shift = p.Left - _platform.Left;
-                double f0 = _x + shift + _unit * 4, f1 = _x + shift + _unit * 14;
-                double overlap = Math.Min(f1, p.X1) - Math.Max(f0, p.X0);
-                if (overlap > bestOverlap) { bestOverlap = overlap; best = p; dx = shift; }
+                _platformScan = now + 0.4;
+                double bestOverlap = -1;
+                foreach (var p in Scan(minY, maxY))
+                {
+                    if (p.Hwnd != hwnd) continue;
+                    double f0 = _x + shift + _unit * 4, f1 = _x + shift + _unit * 14;
+                    double overlap = Math.Min(f1, p.X1) - Math.Max(f0, p.X0);
+                    if (overlap > bestOverlap)
+                    {
+                        bestOverlap = overlap;
+                        _platformSpan = (p.X0, p.X1);
+                    }
+                }
             }
-            if (best == null || bestOverlap < _unit * 2) return false;
-            double y = best.Top - _h;
+
+            double x0 = _platformSpan?.X0 ?? r.Left;
+            double x1 = _platformSpan?.X1 ?? r.Right;
+            x0 += shift;
+            x1 += shift;
+            double fx0 = _x + _unit * 4, fx1 = _x + _unit * 14;
+            if (Math.Min(fx1, x1) - Math.Max(fx0, x0) < _unit * 2) return false;
+
+            double y = r.Top - _h;
             if (y < minY - _unit * 2 || y > maxY) return false;
-            best.Name = _platform.Name;
-            if (Math.Abs(dx) > 0.5 && _state != "drag")
+
+            if (Math.Abs(shift) > 0.5 && _state != "drag")
             {
-                _x += dx;
-                TrackRide(now, dx);
+                _x += shift;
+                TrackRide(now, shift);
             }
-            _platformMoving = Math.Abs(y - _y) > 0.5 || Math.Abs(dx) > 0.5;
-            _platformSpan = (best.X0, best.X1);
-            _platform = best;
+            _platformMoving = Math.Abs(y - _y) > 0.5 || Math.Abs(shift) > 0.5;
+            _platform.Left = r.Left;
+            _platform.Top = r.Top;
+            _platform.X0 = x0;
+            _platform.X1 = x1;
             _y = y;
             return true;
         }

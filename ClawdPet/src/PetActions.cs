@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Media.Imaging;
 using Forms = System.Windows.Forms;
 
 namespace ClawdPet
@@ -260,14 +261,49 @@ namespace ClawdPet
             Say(visits > 1 ? "app_again" : "app_new", name: name, ctx: ctx);
         }
 
-        // ---------- печеньки и кучки ----------
+        // ---------- иконки с панели задач и кучки ----------
+
+        int SnackSize() => Math.Max(18, (int)(_unit * 5));
 
         public void Feed()
         {
             if (!_running) Start(false);
             if (!_posReady) return;
             double now = Now;
-            if (_foods.Count >= C.MaxFood) { ShowBubble("Я столько не съем!"); return; }
+            if (_snacks.Count >= C.MaxSnacks) { ShowBubble("Я столько не съем!"); return; }
+            if (_state == "sleep")
+            {
+                _state = "idle";
+                SetExpr("surprised", 0.8);
+            }
+            _lastInteraction = now;
+            _nextAction = Math.Min(_nextAction, now + 1.0);
+            if (SpawnSnack(now) == null) return;
+            Mem("feed", bond: 0.3);
+            Say("feed");
+            Schedule(0);
+        }
+
+        /// <summary>Иногда Clawd сам тащит иконку с панели задач.</summary>
+        void MaybeStealIcon(double now)
+        {
+            if (!_cfg.EatIcons || now < _nextSteal) return;
+            _nextSteal = now + U(C.StealGapMin, C.StealGapMax);
+            if (_snacks.Count >= C.MaxSnacks || _touch != null || _hopActive) return;
+            if (_state is not ("idle" or "walk") || _mediaKind != null) return;
+            if (_bounds == null) return;
+            var b = _bounds.Value;
+            // «стащить с панели задач» можно, только стоя на ней
+            if (Math.Abs(_y - b.MaxY) > _unit * 2) return;
+            var snack = SpawnSnack(now);
+            if (snack == null) return;
+            Mem("steal", snack.Name, bond: 0.1);
+            Say("steal", ctx: snack.Name != null ? new() { ["name"] = snack.Name } : null);
+        }
+
+        /// <summary>Иконка выезжает из панели задач рядом с питомцем.</summary>
+        Snack SpawnSnack(double now)
+        {
             var b = Bounds(now);
             bool grounded = _state is "idle" or "walk" or "sleep";
             double feet = grounded ? _y + _unit * 12 : b.MaxY + _unit * 12;
@@ -277,39 +313,48 @@ namespace ClawdPet
                 lo = Math.Max(lo, _platformSpan.Value.X0);
                 hi = Math.Min(hi, _platformSpan.Value.X1);
             }
-            var bmp = ParticleBmp("cookie");
+            int size = SnackSize();
+            var icon = IconBank.Take();
+            string name = null;
+            BitmapSource bmp;
+            if (icon != null)
+            {
+                bmp = Sprites.IconTile(icon.Bmp, size);
+                name = icon.Name;
+            }
+            else
+            {
+                bmp = Sprites.FallbackIcon(size, _rng.Next(4));
+            }
             int fw = bmp.PixelWidth, fh = bmp.PixelHeight;
             double cx = _x + _w / 2.0;
             int side = cx - lo > hi - cx ? -1 : 1;
             if (_rng.NextDouble() < 0.3) side = -side;
-            double fx = Clamp(cx + side * U(Dp(120), Dp(320)), lo + fw, hi - fw * 2);
-            var win = new SpriteWindow(bmp, _scale, (int)Dp(4), (int)Dp(4), 0) { X = fx - fw / 2.0, Y = feet - fh };
-            var food = new Food { Win = win, Born = now };
+            double fx = Clamp(cx + side * U(Dp(120), Dp(320)), lo + fw, Math.Max(lo + fw, hi - fw));
+            double restY = feet - fh;
+            var win = new SpriteWindow(bmp, _scale, (int)Dp(3), (int)Dp(3), (int)Dp(3))
+            {
+                X = fx - fw / 2.0,
+                Y = feet - fh * 0.15, // почти целиком спрятана в панели задач
+            };
+            var snack = new Snack { Win = win, Born = now, Name = name };
             win.Clicked = () => { };
             win.Show();
-            win.SetLook(0.1, 0, 1);
-            win.Animate(win.X, win.Y, 1.0, 0, 1, 0.32, "overshoot", null);
-            _foods.Add(food);
-            Mem("feed", bond: 0.3);
-            if (_state == "sleep")
-            {
-                _state = "idle";
-                SetExpr("surprised", 0.8);
-            }
-            _lastInteraction = now;
-            _nextAction = Math.Min(_nextAction, now + 1.0);
-            Say("feed");
-            Schedule(0);
+            win.SetLook(0.85, 0, 0);
+            win.Animate(fx - fw / 2.0, restY, 1.0, 0, 1, 0.42, "overshoot", null);
+            _snacks.Add(snack);
+            _nextSteal = now + U(C.StealGapMin, C.StealGapMax);
+            return snack;
         }
 
-        bool GoForFood(double now, double minX, double maxX)
+        bool GoForSnack(double now, double minX, double maxX)
         {
-            Food best = null;
+            Snack best = null;
             double bestDist = double.MaxValue;
             double feet = _y + _unit * 12;
-            foreach (var f in _foods)
+            foreach (var f in _snacks)
             {
-                if (f.Eating || Math.Abs(f.Win.Bottom - feet) > _unit * 3) continue;
+                if (f.Eating || Math.Abs(f.Win.Bottom - feet) > _unit * 4) continue;
                 double d = Math.Abs(f.Win.CenterX - (_x + _w / 2.0));
                 if (d < bestDist) { bestDist = d; best = f; }
             }
@@ -323,34 +368,34 @@ namespace ClawdPet
             {
                 _walkTarget = target;
                 _state = "walk";
-                _goFood = true;
+                _goSnack = true;
                 return true;
             }
             if (Math.Abs(fcx - (_x + _w / 2.0)) > _w * 1.2) return false; // не дотянуться
-            EatFood(now, best);
+            EatSnack(now, best);
             return true;
         }
 
         (double X, double Y) MouthXY() => (_x + _w / 2.0, _y + _hopOff + _unit * 7);
 
-        void EatFood(double now, Food food)
+        void EatSnack(double now, Snack snack)
         {
-            food.Eating = true;
+            snack.Eating = true;
             var (mx, my) = MouthXY();
-            _look = food.Win.CenterX > mx ? 1 : -1;
+            _look = snack.Win.CenterX > mx ? 1 : -1;
             _mouthOpenUntil = now + 0.7;
             _chewUntil = 0;
             _nextAction = now + 3.0;
-            var w = food.Win;
+            var w = snack.Win;
             w.Animate(mx - w.ImgW / 2.0, my - w.ImgH / 2.0, 0.05, Pick(new[] { -1, 1 }) * U(120, 300), 1, 0.56, "accel", () =>
             {
-                _foods.Remove(food);
+                _snacks.Remove(snack);
                 w.Close();
-                OnSwallowed();
+                OnSwallowed(snack.Name);
             });
         }
 
-        void OnSwallowed()
+        void OnSwallowed(string name)
         {
             double now = Now;
             _mouthOpenUntil = 0;
@@ -358,8 +403,9 @@ namespace ClawdPet
             _squashUntil = now + 0.12;
             SetExpr("happy", 1.6);
             _cfg.EatenCount++;
-            Mem("eat", bond: 0.2);
-            if (_rng.NextDouble() < 0.7) Say("eat");
+            Mem("eat", name, bond: 0.2);
+            for (int i = 0; i < 2; i++) SpawnParticle("spark");
+            if (_rng.NextDouble() < 0.7) Say("eat", ctx: name != null ? new() { ["name"] = name } : null);
             if (_cfg.Poop)
             {
                 _cfg.PoopMeter++;
@@ -374,13 +420,13 @@ namespace ClawdPet
             Schedule(0);
         }
 
-        void PruneFood(double now)
+        void PruneSnacks(double now)
         {
-            foreach (var f in _foods.ToList())
+            foreach (var f in _snacks.ToList())
             {
                 if (f.Eating || now - f.Born < 180) continue;
                 f.Eating = true;
-                f.Win.Animate(f.Win.X, f.Win.Y, 0.6, 0, 0, 0.4, "linear", () => { _foods.Remove(f); f.Win.Close(); });
+                f.Win.Animate(f.Win.X, f.Win.Y, 0.6, 0, 0, 0.4, "linear", () => { _snacks.Remove(f); f.Win.Close(); });
             }
         }
 

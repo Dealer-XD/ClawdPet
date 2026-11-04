@@ -20,6 +20,7 @@ namespace ClawdPet
         public bool RideWindows { get; set; } = true;
         public bool ShakeWindows { get; set; } = true;
         public bool HideFullscreen { get; set; } = true;
+        public bool EatIcons { get; set; } = true;
 
         public bool AiEnabled { get; set; } = false;
         public string AiKey { get; set; } = "";

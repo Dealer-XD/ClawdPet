@@ -32,10 +32,6 @@ namespace ClawdPet
         {
             ['X'] = 0xFF8A5A33, ['o'] = 0xFFB27D4E, ['w'] = 0xFFFFFFFF, ['k'] = 0xFF1A1A1A,
         };
-        public static readonly Dictionary<char, uint> CookieColors = new()
-        {
-            ['X'] = 0xFFD9A55B, ['o'] = 0xFF5A3A1E,
-        };
 
         public static readonly Dictionary<string, string[]> Patterns = new()
         {
@@ -44,7 +40,6 @@ namespace ClawdPet
             ["spark"] = new[] { "..X..", "..X..", "XX.XX", "..X..", "..X.." },
             ["note"] = new[] { "..XXXXX", "..X...X", "..X...X", "..X...X", "XXX.XXX", "XXX.XXX" },
             ["poop"] = new[] { "....X....", "...XXo...", "..XXXXX..", ".XXXXXXo.", ".XwkXwkX.", "XXXXXXXXo", "XXXXXXXXX" },
-            ["cookie"] = new[] { "..XXX..", ".XoXXX.", "XXXXoXX", "XoXXXXX", ".XXXoX.", "..XXX.." },
         };
 
         public static readonly Dictionary<string, string[]> Phrases = new()
@@ -64,8 +59,9 @@ namespace ClawdPet
             ["dizzy"] = new[] { "Голова кружится…", "@_@", "Где я?" },
             ["wake"] = new[] { "А? Что?", "Я не спал!", "*зевает*" },
             ["jump"] = new[] { "Хоп!", "Йе!", "Ура!" },
-            ["feed"] = new[] { "Еда!", "Это мне?", "О, печенька!", "Ням-ням сейчас будет" },
-            ["eat"] = new[] { "Ням!", "Хрум-хрум", "Вкусная печенька", "*жуёт*", "Ммм, пиксели", "Добавки!" },
+            ["feed"] = new[] { "Это иконка?", "О, с панели задач!", "Сейчас съем!", "Ммм, чужая иконка" },
+            ["steal"] = new[] { "Стащил иконку!", "Никто не заметил…", "Иконка была лишней", "Тихо-тихо… ням" },
+            ["eat"] = new[] { "Ням! Иконка!", "Хрум-хрум", "Вкусная иконка", "*жуёт иконку*", "Ммм, пиксели", "Добавки!" },
             ["music"] = new[] { "О, музыка!", "Танцуем!", "Это мой трек!", "♪♪♪" },
             ["music_end"] = new[] { "Эх, закончилось", "Ещё!", "Хороший трек" },
             ["app_again"] = new[] { "О, опять {name}", "Снова {name}?", "Опять {name}?", "Мы тут уже были" },
@@ -76,7 +72,7 @@ namespace ClawdPet
             ["hang_fall"] = new[] { "Ой-ой-ой!", "Не удержался!", "Падаю!" },
             ["peek"] = new[] { "Ку-ку!", "Я тебя вижу", "*подглядывает*", "Ты тут?" },
             ["found"] = new[] { "Нашёл меня!", "Эх, раскусил", "Я просто смотрел!" },
-            ["poop"] = new[] { "Упс…", "Это не я!", "Ой…", "Печенье было лишним", "*краснеет*" },
+            ["poop"] = new[] { "Упс…", "Это не я!", "Ой…", "Иконки были лишними", "*краснеет*" },
             ["clean"] = new[] { "Спасибо!", "Прости…", "Больше не буду!", "Ты лучший" },
             ["drop"] = new[] { "Ставь аккуратнее", "Спасибо, тут удобно", "Приземлился!", "Я тут постою" },
             ["land_window"] = new[] { "Стою на окне!", "Тут удобно", "Хорошая крыша", "Посижу на окошке" },
@@ -95,8 +91,9 @@ namespace ClawdPet
             ["dizzy"] = "Ты сильно ударился о край экрана, голова кружится.",
             ["wake"] = "Тебя только что разбудили, ты спал.",
             ["jump"] = "Ты радостно подпрыгнул после двойного клика.",
-            ["feed"] = "Пользователь положил тебе печеньку.",
-            ["eat"] = "Ты только что съел печеньку, которую дал пользователь.",
+            ["feed"] = "Пользователь положил тебе иконку с панели задач Windows.",
+            ["steal"] = "Ты сам стащил иконку с панели задач и предвкушаешь.",
+            ["eat"] = "Ты только что съел иконку с панели задач, которую дал пользователь.",
             ["music"] = "На компьютере заиграла музыка, тебе хочется танцевать.",
             ["music_end"] = "Музыка закончилась.",
             ["app_again"] = "Пользователь снова переключился на программу, в которой вы уже бывали.",
@@ -107,7 +104,7 @@ namespace ClawdPet
             ["hang_fall"] = "Ты не удержался и падаешь вниз.",
             ["peek"] = "Ты выглядываешь из-за края экрана.",
             ["found"] = "Пользователь заметил, что ты подглядывал из-за края экрана.",
-            ["poop"] = "Ты переел печенья и оставил кучку, тебе неловко.",
+            ["poop"] = "Ты переел иконок с панели задач и оставил кучку, тебе неловко.",
             ["clean"] = "Пользователь убрал за тобой кучку, ты благодарен.",
             ["drop"] = "Пользователь отпустил тебя и поставил на место.",
             ["land_window"] = "Ты приземлился и стоишь на верхнем крае окна программы.",
@@ -187,8 +184,13 @@ namespace ClawdPet
         public const int MaxParticles = 14;
         public const int MaxFrameCache = 48;
         public const int MaxPoops = 3;
-        public const int MaxFood = 3;
+        public const int MaxSnacks = 3;
         public static readonly (int, int) PoopEvery = (2, 4);
+
+        // иконки с панели задач
+        public const double StealFirst = 45.0;
+        public const double StealGapMin = 70.0;
+        public const double StealGapMax = 160.0;
 
         public const int ShakeHits = 4;
         public const double ShakeWindow = 0.9;
@@ -218,7 +220,7 @@ namespace ClawdPet
 
         public static readonly HashSet<string> ActiveKinds = new()
         {
-            "pet", "tap", "jump", "annoyed", "drag", "throw", "shake", "hang", "clean", "feed", "chat_open",
+            "pet", "tap", "jump", "annoyed", "drag", "throw", "shake", "hang", "clean", "feed", "steal", "chat_open",
         };
 
         public static readonly Dictionary<string, (string WithDetail, string Without)> EpisodeText = new()
@@ -231,8 +233,9 @@ namespace ClawdPet
             ["throw"] = ("тебя бросили ({d})", "тебя бросили"),
             ["shake"] = ("окно потрясли, тебя сбросило", null),
             ["hang"] = ("ты повис на верхнем крае экрана", null),
-            ["feed"] = ("тебя покормили печенькой", null),
-            ["eat"] = ("ты съел печеньку", null),
+            ["feed"] = ("тебе дали иконку с панели задач", null),
+            ["steal"] = ("ты стащил иконку с панели задач", null),
+            ["eat"] = ("ты съел иконку «{d}»", "ты съел иконку с панели задач"),
             ["poop"] = ("ты переел и оставил кучку", null),
             ["clean"] = ("пользователь убрал за тобой кучку", null),
             ["ride"] = ("ты прокатился на окне «{d}»", "ты прокатился на окне"),

@@ -22,7 +22,8 @@ namespace ClawdPet
         public const long WS_EX_APPWINDOW = 0x00040000L;
 
         public static readonly IntPtr HWND_TOPMOST = new(-1);
-        public const uint SWP_NOSIZE = 0x0001, SWP_NOMOVE = 0x0002, SWP_NOZORDER = 0x0004, SWP_NOACTIVATE = 0x0010, SWP_SHOWWINDOW = 0x0040;
+        public const uint SWP_NOSIZE = 0x0001, SWP_NOMOVE = 0x0002, SWP_NOZORDER = 0x0004, SWP_NOACTIVATE = 0x0010,
+            SWP_SHOWWINDOW = 0x0040, SWP_NOCOPYBITS = 0x0100, SWP_NOSENDCHANGING = 0x0400;
 
         public const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
         public const int DWMWA_CLOAKED = 14;
@@ -71,7 +72,8 @@ namespace ClawdPet
         }
 
         public static void Move(IntPtr h, int x, int y) =>
-            SetWindowPos(h, IntPtr.Zero, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+            SetWindowPos(h, IntPtr.Zero, x, y, 0, 0,
+                SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOCOPYBITS | SWP_NOSENDCHANGING);
 
         public static void Place(IntPtr h, int x, int y, int w, int hgt) =>
             SetWindowPos(h, HWND_TOPMOST, x, y, w, hgt, SWP_NOACTIVATE);
