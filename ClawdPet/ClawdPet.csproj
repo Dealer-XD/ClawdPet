@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>ClawdPet</AssemblyName>
+    <RootNamespace>ClawdPet</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <StartupObject>ClawdPet.Program</StartupObject>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <Version>2.0.0</Version>
+    <Product>Clawd Pet</Product>
+    <NoWarn>WFAC010;CA1416</NoWarn>
+    <ApplicationIcon>clawd.ico</ApplicationIcon>
+  </PropertyGroup>
+</Project>
