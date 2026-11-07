@@ -10,6 +10,7 @@ namespace ClawdPet
         public bool Show { get; set; } = true;
         public int Size { get; set; } = 1;
         public int Color { get; set; } = 0;
+        public int Jump { get; set; } = 1;
         public bool Gravity { get; set; } = true;
         public bool Wander { get; set; } = true;
         public bool Phrases { get; set; } = true;

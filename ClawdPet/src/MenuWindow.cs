@@ -23,6 +23,9 @@ namespace ClawdPet
             _pet = pet;
             _openSettings = openSettings;
             Resources = Theme.Load();
+            // Неявный стиль не применяется к самому ContextMenu — задаём шаблон явно,
+            // иначе всплывает стандартная белая рамка Windows.
+            Style = (Style)Resources["ClaudeMenuStyle"];
             FontFamily = Theme.Font;
             FontSize = 12.5;
             SnapsToDevicePixels = true;
@@ -42,7 +45,7 @@ namespace ClawdPet
             });
             root.Children.Add(new TextBlock
             {
-                Text = " Claude Code v2.0.0 ",
+                Text = " Claude Code v" + C.Version + " ",
                 Foreground = Theme.AccentBrush,
                 Background = Theme.BgBrush,
                 Padding = new Thickness(6, 1, 6, 1),
@@ -114,7 +117,7 @@ namespace ClawdPet
             welcome.Children.Add(portrait);
             welcome.Children.Add(new TextBlock
             {
-                Text = $"Clawd v2.0.0 · {_pet.BondLabel()}",
+                Text = $"Clawd v{C.Version} · {_pet.BondLabel()}",
                 Foreground = Theme.DimBrush,
                 FontSize = 11.5,
                 HorizontalAlignment = HorizontalAlignment.Center,

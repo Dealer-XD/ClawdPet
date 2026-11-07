@@ -149,12 +149,20 @@ namespace ClawdPet
 
         // ---------- реплики и ИИ ----------
 
-        bool AiReady() => _cfg.AiEnabled && (!string.IsNullOrWhiteSpace(_cfg.AiKey) || !string.IsNullOrWhiteSpace(_cfg.Ai2Url));
+        bool AiReady()
+        {
+            if (!_cfg.AiEnabled) return false;
+            bool mainReady = !string.IsNullOrWhiteSpace(_cfg.AiKey) ||
+                             (_cfg.AiProvider == 1 && !C.AiUrlNeedsKey(_cfg.AiUrl));
+            return mainReady || !string.IsNullOrWhiteSpace(_cfg.Ai2Url);
+        }
 
         List<int> AiProviders(double now)
         {
             var result = new List<int>();
-            if (!string.IsNullOrWhiteSpace(_cfg.AiKey) && now >= _aiBo[0]) result.Add(0);
+            bool mainReady = !string.IsNullOrWhiteSpace(_cfg.AiKey) ||
+                             (_cfg.AiProvider == 1 && !C.AiUrlNeedsKey(_cfg.AiUrl));
+            if (mainReady && now >= _aiBo[0]) result.Add(0);
             if (!string.IsNullOrWhiteSpace(_cfg.Ai2Url) && now >= _aiBo[1]) result.Add(1);
             return result;
         }
@@ -288,7 +296,7 @@ namespace ClawdPet
             if (!_running) Start(false);
             if (!AiReady())
             {
-                ShowBubble("Включи ИИ и вставь API-ключ");
+                ShowBubble("Включи ИИ и заполни адрес, модель и ключ");
                 return;
             }
             Say("hello", force: true);

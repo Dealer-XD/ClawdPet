@@ -491,8 +491,9 @@ namespace ClawdPet
         void Hop(double strength)
         {
             if (_state is not ("idle" or "walk")) return;
+            int j = Math.Max(0, Math.Min(C.JumpScale.Length - 1, _cfg.Jump));
             _hopActive = true;
-            _hopVy = -strength;
+            _hopVy = -strength * C.JumpScale[j];
             if (_hopOff > 0) _hopOff = 0;
         }
 

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 
@@ -5,10 +6,14 @@ namespace ClawdPet
 {
     public static class C
     {
+        public const string Version = "2.1.0";
         public const int GridW = 18;
         public const int GridH = 13;
         public static readonly string[] SizeItems = { "Маленький", "Средний", "Большой" };
         public static readonly double[] SizeDp = { 4.0, 5.0, 7.0 };
+
+        public static readonly string[] JumpItems = { "Низкая", "Обычная", "Высокая" };
+        public static readonly double[] JumpScale = { 0.65, 1.0, 1.45 };
 
         public static readonly (string Name, uint Body, uint Eye)[] Palettes =
         {
@@ -18,6 +23,7 @@ namespace ClawdPet
             ("Небесный", 0xFF4FA8E8, 0xFF0E1C29),
             ("Розовый", 0xFFEE85AE, 0xFF2A1220),
             ("Графит", 0xFF5E6670, 0xFFF2F2F2),
+            ("Чипсовый", 0xFF6C1315, 0xFFEEE7D5),
         };
 
         public static readonly string[] SleepItems = { "Через 1 минуту", "Через 3 минуты", "Через 10 минут", "Никогда" };
@@ -116,6 +122,39 @@ namespace ClawdPet
         public const string AiGeminiModel = "gemini-3.5-flash-lite";
         public const string AiOpenAiUrl = "https://api.openai.com/v1";
         public const string AiOpenAiModel = "gpt-4o-mini";
+
+        // Пресеты OpenAI-совместимых сервисов: название, базовый адрес, нужен ли ключ, модель.
+        // Модели намеренно не угадываем: если поле пустое, пользователь вписывает свою.
+        public static readonly (string Name, string Url, bool NeedsKey, string Model)[] AiPresets =
+        {
+            ("OpenAI", C.AiOpenAiUrl, true, C.AiOpenAiModel),
+            ("OpenRouter", "https://openrouter.ai/api/v1", true, ""),
+            ("Groq", "https://api.groq.com/openai/v1", true, ""),
+            ("DeepSeek", "https://api.deepseek.com/v1", true, ""),
+            ("Mistral", "https://api.mistral.ai/v1", true, ""),
+            ("Together AI", "https://api.together.xyz/v1", true, ""),
+            ("LM Studio (локально)", "http://localhost:1234/v1", false, ""),
+            ("Ollama (локально)", "http://localhost:11434/v1", false, ""),
+            ("Свой", "", false, ""),
+        };
+
+        /// <summary>Нужен ли ключ для адреса из списка пресетов. Неизвестный сервер считаем требующим ключ.</summary>
+        public static bool AiUrlNeedsKey(string url)
+        {
+            if (string.IsNullOrWhiteSpace(url)) return true;
+            string norm = url.Trim().TrimEnd('/').ToLowerInvariant();
+            foreach (var p in AiPresets)
+                if (!string.IsNullOrWhiteSpace(p.Url) && p.Url.Trim().TrimEnd('/').ToLowerInvariant() == norm)
+                    return p.NeedsKey;
+            // Локальные серверы (localhost, 127.0.0.1, ::1) обычно работают без ключа.
+            try
+            {
+                var uri = new Uri(norm.Contains("://") ? norm : "https://" + norm);
+                if (uri.IsLoopback) return false;
+            }
+            catch (UriFormatException) { }
+            return true;
+        }
         public static readonly string[] AiChatItems = { "Часто", "Нормально", "Редко", "Никогда" };
         public static readonly double[] AiChatGaps = { 20.0, 60.0, 180.0, 0.0 };
         public const int AiTimeout = 15;

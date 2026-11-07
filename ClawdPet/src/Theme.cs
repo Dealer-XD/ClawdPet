@@ -335,19 +335,21 @@ namespace ClawdPet
     </Setter>
   </Style>
 
-  <Style TargetType=""ContextMenu"">
+  <Style x:Key=""ClaudeMenuStyle"" TargetType=""ContextMenu"">
     <Setter Property=""HasDropShadow"" Value=""False""/>
     <Setter Property=""FontFamily"" Value=""{StaticResource Mono}""/>
     <Setter Property=""Template"">
       <Setter.Value>
         <ControlTemplate TargetType=""ContextMenu"">
-          <Grid Margin=""9"" Background=""Transparent"">
+          <Grid Background=""Transparent"">
             <ItemsPresenter/>
           </Grid>
         </ControlTemplate>
       </Setter.Value>
     </Setter>
   </Style>
+
+  <Style TargetType=""ContextMenu"" BasedOn=""{StaticResource ClaudeMenuStyle}""/>
 
   <Style x:Key=""RawMenuItem"" TargetType=""MenuItem"">
     <Setter Property=""Template"">

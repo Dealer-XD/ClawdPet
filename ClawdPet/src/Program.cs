@@ -58,7 +58,7 @@ namespace ClawdPet
             _pet = pet;
             _icon = new Forms.NotifyIcon
             {
-                Text = "Clawd",
+                Text = "Clawd " + C.Version,
                 Icon = _pet.MakeTrayIcon(),
                 Visible = true,
             };

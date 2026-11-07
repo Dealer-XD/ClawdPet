@@ -13,7 +13,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <StartupObject>ClawdPet.Program</StartupObject>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
-    <Version>2.0.0</Version>
+    <Version>2.1.0</Version>
     <Product>Clawd Pet</Product>
     <NoWarn>WFAC010;CA1416</NoWarn>
     <ApplicationIcon>clawd.ico</ApplicationIcon>

@@ -815,11 +815,8 @@ namespace ClawdPet
             if (landed != null) impact = Math.Max(impact, landSpeed);
             else if (_y < minY)
             {
-                if (_vy < -Dp(250) && !_shakeDizzy)
-                {
-                    StartHang(now, minY);
-                    return;
-                }
+                // Верх экрана — такая же стена, как и боковые: отражаем скорость
+                // и сохраняем горизонтальную инерцию, чтобы работали отскоки.
                 _y = minY;
                 impact = Math.Max(impact, Math.Abs(_vy));
                 _vy = Math.Abs(_vy) * 0.55;
