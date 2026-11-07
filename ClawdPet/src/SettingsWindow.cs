@@ -418,9 +418,8 @@ namespace ClawdPet
                     "на самый верх и отпустить — повиснет на руках. " +
                     "Танцует под музыку, комментирует программы, таскает иконки с панели задач " +
                     "и иногда оставляет кучки — кликни, чтобы убрать.\n\n" +
-                    "ClawdPet — порт плагина ClawdPetPlugin для exteraGram на Windows (оригинал — @itskotovski, форк — @Skorvash).
-
-                    Это неофициальный фанатский проект. Он не связан с Anthropic, не одобрен и не спонсируется ею. «Claude» — товарный знак Anthropic.");
+                    "ClawdPet — порт плагина ClawdPetPlugin для exteraGram на Windows (оригинал — @itskotovski, форк — @Skorvash).\n" +
+                    "Это неофициальный фанатский проект. Он не связан с Anthropic, не одобрен и не спонсируется ею. «Claude» — товарный знак Anthropic.");
             return p;
         }
     }

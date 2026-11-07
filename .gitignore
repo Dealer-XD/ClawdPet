@@ -1,6 +1,8 @@
 # Сборка .NET
+publish/
 bin/
 obj/
 *.user
 *.suo
+*.zip
 .vs/
