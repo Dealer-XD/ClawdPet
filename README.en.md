@@ -118,6 +118,12 @@ ClawdPet/
 - To build: [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) (the project uses WPF and Windows Forms, so it builds for Windows)
 - To run a framework-dependent build: .NET 8 Desktop Runtime
 
+## Usage
+
+<img width="379" height="51" alt="Снимок экрана 2026-11-09 185657" src="https://github.com/user-attachments/assets/fa0d26a4-d702-461e-ab62-7727aafe6570"/>
+
+On average, ClawdPet consumes 57.5 MB of RAM on Windows 11 Pro 26H2. At its peak, it uses 61.5 MB
+
 ## Known limitations
 
 - Windows only.
